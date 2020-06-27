@@ -6,6 +6,7 @@ enum
 	GC_WITH_RECT  = 0, //初次取样，需要初始化GMM
 	GC_CUT        = 1  //后续取样，不需要再初始化GMM
 };
+//在显示时，确定背景的部分将会被遮罩；其余部分正常显示
 enum {
 	MUST_BGD = 0,//确定背景
 	MUST_FGD = 1,//确定前景

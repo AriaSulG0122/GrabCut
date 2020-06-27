@@ -86,7 +86,7 @@ int main()
 				cout << "Finish iterator:" << iterCount << endl;
 			}
 			else
-				cout << "rect must be determined>" << endl;
+				cout << "Rectangle must be determined!" << endl;
 			break;
 		}
 	}

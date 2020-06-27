@@ -40,7 +40,8 @@ void GCApplication::showImage()
 	else
 	{
 		getBinMask(mask, binMask);
-		image->copyTo(res, binMask);  //show the GrabCuted image
+		//展示分割后的图像
+		image->copyTo(res, binMask); //mask为0的地方会被遮罩，其余部分正常显示
 	}
 	imwrite("result.jpg", res);
 	vector<Point>::const_iterator it;
