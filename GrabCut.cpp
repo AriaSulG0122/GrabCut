@@ -73,46 +73,43 @@ static void calcuNWeight(const Mat& _img, Mat& _l, Mat& _ul, Mat& _u, Mat& _ur, 
 		}
 	}
 }
-//根据输入矩阵设置 mask，矩阵外肯定是背景，矩阵内可能是前景。 
-static void initMaskWithRect(Mat& _mask, Size _imgSize, Rect _rect) {
-	_mask.create(_imgSize, CV_8UC1);
-	_mask.setTo(MUST_BGD);
-	_rect.x = _rect.x > 0 ? _rect.x : 0;
-	_rect.y = _rect.y > 0 ? _rect.y : 0;
-	_rect.width = _rect.x + _rect.width > _imgSize.width ? _imgSize.width - _rect.x : _rect.width;
-	_rect.height = _rect.y + _rect.height > _imgSize.height ? _imgSize.height - _rect.y : _rect.height;
-	(_mask(_rect)).setTo(Scalar(MAYBE_FGD));
-}
-//利用 kmeans 方法初始化 GMM 模型
+
+//利用opencv中的 kmeans 方法初始化 GMM 模型
 static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) {
-	const int kmeansItCount = 10;
+	const int kmeansItCount = 10;//前景背景总共10个GMM分量
 	Mat bgdLabels, fgdLabels;
-	vector<Vec3f> bgdSamples, fgdSamples;
+	vector<Vec3f> bgdSamples, fgdSamples;//Vec3f为三通道float，在这里记录了RGB三通道信息
 	Point p;
-	for (p.y = 0; p.y < img.rows; p.y++){
-		for (p.x = 0; p.x < img.cols; p.x++){
+	for (p.y = 0; p.y < img.rows; p.y++) {
+		for (p.x = 0; p.x < img.cols; p.x++) {
 			if (mask.at<uchar>(p) == MUST_BGD || mask.at<uchar>(p) == MAYBE_BGD)
-				bgdSamples.push_back((Vec3f)img.at<Vec3b>(p));
+				bgdSamples.push_back((Vec3f)img.at<Vec3b>(p));//推入背景样本
 			else
-				fgdSamples.push_back((Vec3f)img.at<Vec3b>(p));
+				fgdSamples.push_back((Vec3f)img.at<Vec3b>(p));//推入前景样本
 		}
 	}
+	//对前景样本进行kmeas聚类，分为5类
 	Mat _bgdSamples((int)bgdSamples.size(), 3, CV_32FC1, &bgdSamples[0][0]);
+	//参数依次为：输入数据，聚类数，聚类标签，终止条件（终止模式、最大迭代次数、精度），重复次数，初始化中心的算法
 	kmeans(_bgdSamples, GMM::K, bgdLabels,
 		TermCriteria(CV_TERMCRIT_ITER, kmeansItCount, 0.0), 0, KMEANS_PP_CENTERS);
+	//对背景样本进行kmeas聚类，分为5类
 	Mat _fgdSamples((int)fgdSamples.size(), 3, CV_32FC1, &fgdSamples[0][0]);
 	kmeans(_fgdSamples, GMM::K, fgdLabels,
 		TermCriteria(CV_TERMCRIT_ITER, kmeansItCount, 0.0), 0, KMEANS_PP_CENTERS);
-	//5.Learn GMM(根据聚类的样本更新每个GMM组件中的均值、协方差等参数）
-	bgdGMM.learningBegin();
-	for (int i = 0; i < (int)bgdSamples.size(); i++)
-		bgdGMM.addSample(bgdLabels.at<int>(i, 0), bgdSamples[i]);
-	bgdGMM.learningEnd();
 
-	fgdGMM.learningBegin();
+	//初始化中间变量
+	bgdGMM.InitInterVar();
+	//根据聚类的样本更新每个GMM组件中的均值、协方差等参数
+	for (int i = 0; i < (int)bgdSamples.size(); i++)
+		//往对应模型增加单个点，addSample第一个参数为对应模型编号，第二个参数为像素点颜色信息
+		bgdGMM.addSample(bgdLabels.at<int>(i, 0), bgdSamples[i]);
+	bgdGMM.UpdatePara();
+
+	fgdGMM.InitInterVar();
 	for (int i = 0; i < (int)fgdSamples.size(); i++)
 		fgdGMM.addSample(fgdLabels.at<int>(i, 0), fgdSamples[i]);
-	fgdGMM.learningEnd();
+	fgdGMM.UpdatePara();
 }
 //迭代循环第一步，为每个像素分配GMM中所属的高斯模型，保存在partIndex中。
 static void assignGMMS(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, Mat& _partIndex) {
@@ -128,8 +125,8 @@ static void assignGMMS(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, co
 }
 //迭代循环第二步，根据得到的结果计算GMM参数值。
 static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgdGMM, const Mat& _partIndex) {
-	_bgdGMM.learningBegin();
-	_fgdGMM.learningBegin();
+	_bgdGMM.InitInterVar();
+	_fgdGMM.InitInterVar();
 	Point p;
 	for (int i = 0; i < GMM::K; i++) {
 		for (p.y = 0; p.y < _img.rows; p.y++) {
@@ -144,8 +141,8 @@ static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgd
 			}
 		}
 	}
-	_bgdGMM.learningEnd();
-	_fgdGMM.learningEnd();
+	_bgdGMM.UpdatePara();
+	_fgdGMM.UpdatePara();
 }
 //根据得到的结果构造图，使用助教给的现成的库 Done
 static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, double _lambda, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, CutGraph& _graph) {
@@ -199,49 +196,44 @@ static void estimateSegmentation(CutGraph& _graph, Mat& _mask) {
 	}
 }
 GrabCut2D::~GrabCut2D(void) {}
-//GrabCut 主函数
-void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,	InputOutputArray _bgdModel, InputOutputArray _fgdModel,
-	int iterCount, int mode) {
-	std::cout << "Execute GrabCut Function: Please finish the code here!" << std::endl;
-	//一.参数解释：
-	//输入：
-	//cv::InputArray _img,     :输入的color图像(类型-cv:Mat)
-	//cv::Rect rect            :在图像上画的矩形框（类型-cv:Rect) 
-	//int iterCount :           :每次分割的迭代次数（类型-int)
-	//中间变量
-	//cv::InputOutputArray _bgdModel ：   背景模型（推荐GMM)（类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
-	//cv::InputOutputArray _fgdModel :    前景模型（推荐GMM) （类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
-	//输出:
-	//cv::InputOutputArray _mask  : 输出的分割结果 (类型： cv::Mat)
-	//二. 伪代码流程：
-	//1.Load Input Image: 加载输入颜色图像;
+
+//***GrabCut 主函数
+//一.参数解释：
+//输入：
+//cv::InputArray _img,     :输入的color图像(类型-cv:Mat)
+//cv::Rect rect            :在图像上画的矩形框（类型-cv:Rect) 
+//中间变量
+//cv::InputOutputArray _bgdModel ：   背景模型（推荐GMM)（类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
+//cv::InputOutputArray _fgdModel :    前景模型（推荐GMM) （类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
+//输出:
+//cv::InputOutputArray _mask  : 输出的分割结果 (类型： cv::Mat)
+void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
+	InputOutputArray _bgdModel, InputOutputArray _fgdModel, int mode) {
+	//加载输入颜色图像
 	Mat img = _img.getMat();
 	Mat& mask = _mask.getMatRef();
 	Mat& bgdModel = _bgdModel.getMatRef();
 	Mat& fgdModel = _fgdModel.getMatRef();
-	//2.Init Mask: 用矩形框初始化Mask的Label值（确定背景：0， 确定前景：1，可能背景：2，可能前景：3）,矩形框以外设置为确定背景，矩形框以内设置为可能前景;
-	if (mode == GC_WITH_RECT)initMaskWithRect(mask, img.size(), rect);
-	//3.Init GMM: 定义并初始化GMM(其他模型完成分割也可得到基本分数，GMM完成会加分）
+	//定义并初始化GMM
 	GMM bgdGMM(bgdModel), fgdGMM(fgdModel);
-	//4.Sample Points:前背景颜色采样并进行聚类（建议用kmeans，其他聚类方法也可)
-	if (mode == GC_WITH_RECT || mode == GC_WITH_MASK)initGMMs(img, mask, bgdGMM, fgdGMM);
-	if (iterCount <= 0)return;
-	//6.Construct Graph（计算t-weight(数据项）和n-weight（平滑项））
+	//前背景颜色采样并进行聚类(kmeans)
+	//if (mode == GC_WITH_RECT)
+	//为什么上面那句可以省略？？？存疑
+	initGMMs(img, mask, bgdGMM, fgdGMM);
+	//计算t-weight(数据项）和n-weight（平滑项）
 	//计算平滑项，数据项的计算在GMM模型中实现
 	const double gamma = 50;
 	const double beta = calcuBeta(img);
 	Mat leftW, upleftW, upW, uprightW;
 	calcuNWeight(img, leftW, upleftW, upW, uprightW, beta, gamma);
-	//7.Estimate Segmentation(调用maxFlow库进行分割)
+	//调用maxFlow库进行分割
 	Mat compIdxs(img.size(), CV_32SC1);
 	const double lambda = 9 * gamma;
-	//进行迭代
-	for (int i = 0; i < iterCount; i++) {
-		CutGraph graph;
-		assignGMMS(img, mask, bgdGMM, fgdGMM, compIdxs);
-		learnGMMs(img, mask, bgdGMM, fgdGMM, compIdxs);
-		getGraph(img, mask, bgdGMM, fgdGMM, lambda, leftW, upleftW, upW, uprightW, graph);
-		estimateSegmentation(graph, mask);
-	}
+	//进行本轮的迭代
+	CutGraph graph;
+	assignGMMS(img, mask, bgdGMM, fgdGMM, compIdxs);//匹配GMM模型
+	learnGMMs(img, mask, bgdGMM, fgdGMM, compIdxs);//学习GMM参数
+	getGraph(img, mask, bgdGMM, fgdGMM, lambda, leftW, upleftW, upW, uprightW, graph);
+	estimateSegmentation(graph, mask);//调用max flow进行预测分割
 	//8.Save Result输入结果（将结果mask输出，将mask中前景区域对应的彩色图像保存和显示在交互界面中）
 }

@@ -18,6 +18,7 @@ public:
 	void addsample(cv::Vec3f);
 	//根据样例模型，计算高斯模型中的均值和协方差
 	void learn();
+
 	cv::Vec3f getmean()const { return mean; }
 	cv::Mat getcovmat()const { return covmat; }
 private:
@@ -44,26 +45,31 @@ public:
 	//计算一个颜色应该是属于哪个组件（高斯概率最高的项）
 	int choice(const cv::Vec3d) const;
 	//学习之前对数据进行初始化
-	void learningBegin();
+	void InitInterVar();
 	//添加单个的点
 	void addSample(int, const cv::Vec3d);
 	//根据添加的数据，计算新的参数结果
-	void learningEnd();
+	void UpdatePara();
 private:
 	//计算协方差矩阵的逆和行列式的值
 	void calcuInvAndDet(int);
 	//存储GMM模型
 	cv::Mat model;
-	//GMM模型中，每个高斯分布的权重、均值和协方差
-	double *coefs, *mean, *cov;
+	//每个GMM分量的 权重
+	double *coefs;
+	//每个GMM分量的 均值
+	double *mean;
+	//每个GMM分量的 协方差
+	double *cov;
 	//存储协方差的逆，便于计算
 	double covInv[K][3][3];
 	//存储协方差的行列式值
 	double covDet[K];
+
 	//用于学习过程中保存中间数据的变量
-	double sums[K][3];
+	double sums[K][3];//每个GMM模型的每个颜色通道的数值总和
 	double prods[K][3][3];
-	int sampleCounts[K];
+	int sampleCounts[K];//每个GMM模型的像素点数
 	int totalSampleCount;
 };
 #endif

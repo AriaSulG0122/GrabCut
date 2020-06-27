@@ -3,11 +3,11 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "GrabCut.h"
-#include "BorderMatting.h"
 #include <iostream>
 using namespace std;
 using namespace cv;
 
+//不同颜色，用于用户的交互输出
 const Scalar BLUE = Scalar(255,0,0); // Background 
 const Scalar GREEN = Scalar(0,255,0);//Foreground
 const Scalar LIGHTBLUE = Scalar(255,255,160);//ProbBackground
@@ -32,13 +32,12 @@ static void getBinMask( const Mat& comMask, Mat& binMask )
 class GCApplication
 {
 public:
-	enum{ NOT_SET = 0, IN_PROCESS = 1, SET = 2 };
+	enum{ NOT_SET = 0, IN_PROCESS = 1, SET = 2 };//与用户交互框的三种状态
 	static const int radius = 2;
 	static const int thickness = -1;
 
 	void reset();
 	void setImageAndWinName( const Mat& _image, const string& _winName );
-	void borderMatting();
 	void showImage();
 	void mouseClick( int event, int x, int y, int flags, void* param );
 	int nextIter();
@@ -59,7 +58,6 @@ private:
 	vector<Point> fgdPxls, bgdPxls, prFgdPxls, prBgdPxls;
 	int iterCount;
 	GrabCut2D gc;
-	BorderMatting bm;
 };
 
 

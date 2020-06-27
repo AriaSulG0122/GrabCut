@@ -74,16 +74,15 @@ GMM::GMM(Mat& _model) {
 	}
 	model = _model;
 	//存储顺序为权重、均值和协方差
-	coefs = model.ptr<double>(0);
-	mean = coefs + K;
-	cov = mean + 3 * K;
+	coefs = model.ptr<double>(0);//占一个位
+	mean = coefs + K;//占3K个位
+	cov = mean + 3 * K;//占9K个位
 	//如果某个项的权重不为0，则计算其协方差的逆和行列式
 	for (int i = 0; i < K; i++)
 		if (coefs[i] > 0)
 			calcuInvAndDet(i);
 }
 //计算某个颜色属于某个组件的可能性（高斯概率），按照公式进行计算
-//计算公式见：http://blog.csdn.net/Allyli0022/article/details/49488121?ABstrategy=codes_snippets_optimize_v3
 double GMM::possibility(int _i, const Vec3d _color) const {
 	double res = 0;
 	if (coefs[_i] > 0) {
@@ -117,8 +116,9 @@ int GMM::choice(const Vec3d _color) const {
 	}
 	return k;
 }
+
 //学习之前对数据进行初始化
-void GMM::learningBegin() {
+void GMM::InitInterVar() {
 	//对要用的中间变量赋0
 	for (int i = 0; i < K; i++) {
 		for (int j = 0; j < 3; j++)
@@ -140,29 +140,32 @@ void GMM::addSample(int _i, const Vec3d _color) {
 		for (int j = 0; j < 3; j++)
 			prods[_i][i][j] += _color[i] * _color[j];
 	}
-	sampleCounts[_i]++;
-	totalSampleCount++;
+	sampleCounts[_i]++;//该模型像素加一
+	totalSampleCount++;//总体样本数+1
 }
-//根据添加的数据，计算新的参数结果
-void GMM::learningEnd() {
+
+//根据添加的数据，计算新的参数结果，前景和背景分开处理
+void GMM::UpdatePara() {
 	const double variance = 0.01;
+	//遍历每个GMM模型分量
 	for (int i = 0; i < K; i++) {
-		int n = sampleCounts[i];
-		if (n == 0)	coefs[i] = 0;
+		int curCount = sampleCounts[i];//当前模型分量的像素数
+		if (curCount == 0)	coefs[i] = 0;
 		else {
 			//计算高斯模型新的参数
 			//权重
-			coefs[i] = 1.0 * n / totalSampleCount;
+			coefs[i] = 1.0 * curCount / totalSampleCount;
 			//均值
-			double * m = mean + 3 * i;
+			double * curMean = mean + 3 * i;//先获取当前的均值起始位置
+			//
 			for (int j = 0; j < 3; j++) {
-				m[j] = sums[i][j] / n;
+				curMean[j] = sums[i][j] / curCount;
 			}
 			//协方差
 			double* c = cov + 9 * i;
 			for (int p = 0; p < 3; p++) {
 				for (int q = 0; q < 3; q++) {
-					c[p * 3 + q] = prods[i][p][q] / n - m[p] * m[q];
+					c[p * 3 + q] = prods[i][p][q] / curCount - curMean[p] * curMean[q];
 				}
 			}
 			double dtrm = c[0] * (c[4] * c[8] - c[5] * c[7]) - c[1] * (c[3] * c[8] - c[5] * c[6]) + c[2] * (c[3] * c[7] - c[4] * c[6]);

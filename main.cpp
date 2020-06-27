@@ -27,9 +27,9 @@ static void help()
 
 GCApplication gcapp;
 
-static void on_mouse( int event, int x, int y, int flags, void* param )
+static void on_mouse(int event, int x, int y, int flags, void* param)
 {
-	gcapp.mouseClick( event, x, y, flags, param );
+	gcapp.mouseClick(event, x, y, flags, param);
 }
 
 
@@ -38,8 +38,8 @@ int main()
 	//文件名
 	string filename = "messi5.jpg";
 	//读取文件
-	Mat image = imread( filename, 1 );
-	if( image.empty() )
+	Mat image = imread(filename, 1);
+	if (image.empty())
 	{
 		cout << "Couldn't read image filename " << filename << endl;
 		return 1;
@@ -47,53 +47,51 @@ int main()
 
 	//设置图片大小
 	Size s;
-	s.height = image.rows ;
-	s.width = image.cols ;
+	s.height = image.rows;
+	s.width = image.cols;
 	resize(image, image, s);
 
 	//输出帮助信息
 	help();
 
 	const string winName = "image";
-	namedWindow( winName.c_str(), WINDOW_AUTOSIZE );
-	cvSetMouseCallback( winName.c_str(), on_mouse, 0 );
+	namedWindow(winName.c_str(), WINDOW_AUTOSIZE);
+	cvSetMouseCallback(winName.c_str(), on_mouse, 0);
 
-	gcapp.setImageAndWinName( image, winName );
+	gcapp.setImageAndWinName(image, winName);
 	gcapp.showImage();
 
-	while(1){
+	while (1) {
 		int c = cvWaitKey(0);
-		switch( (char) c )
+		switch ((char)c)
 		{
 			//esc，退出
-			case '\x1b':
-				cout << "Exiting ..." << endl;
-				goto exit_main;
+		case '\x1b':
+			cout << "Exiting ..." << endl;
+			goto exit_main;
 			//reset
-			case 'r':
-				cout << endl;
-				gcapp.reset();
+		case 'r':
+			cout << endl;
+			gcapp.reset();
+			gcapp.showImage();
+			break;
+			//开始运行
+		case 'n':
+			int iterCount = gcapp.getIterCount();
+			cout << "Begin iterator:" << iterCount << "...\n";
+			int newIterCount = gcapp.nextIter();
+			if (newIterCount > iterCount)
+			{
 				gcapp.showImage();
-				break;
-			case 'b':
-				gcapp.borderMatting();
-				break;
-			case 'n':
-				int iterCount = gcapp.getIterCount();
-				cout << "<" << iterCount << "... ";
-				int newIterCount = gcapp.nextIter();
-				if( newIterCount > iterCount )
-				{
-					gcapp.showImage();
-					cout << iterCount << ">" << endl;
-				}
-				else
-					cout << "rect must be determined>" << endl;
-				break;
+				cout << "Finish iterator:" << iterCount << endl;
 			}
+			else
+				cout << "rect must be determined>" << endl;
+			break;
+		}
 	}
 
 exit_main:
-	cvDestroyWindow( winName.c_str() );
+	cvDestroyWindow(winName.c_str());
 	return 0;
 }
