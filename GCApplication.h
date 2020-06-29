@@ -18,15 +18,6 @@ const int BGD_KEY = CV_EVENT_FLAG_CTRLKEY;// When press "CTRL" key,the value of 
 const int FGD_KEY = CV_EVENT_FLAG_SHIFTKEY;// When press "SHIFT" key, the value of flags return.
 
 
-//Copy the value of comMask to binMask
-static void getBinMask( const Mat& comMask, Mat& binMask )
-{
-	if( comMask.empty() || comMask.type()!=CV_8UC1 )
-		CV_Error( CV_StsBadArg, "comMask is empty or has incorrect type (not CV_8UC1)" );
-	if( binMask.empty() || binMask.rows!=comMask.rows || binMask.cols!=comMask.cols )
-		binMask.create( comMask.size(), CV_8UC1 );
-	binMask = comMask & 1;
-}
 
 
 class GCApplication
@@ -42,6 +33,7 @@ public:
 	void mouseClick( int event, int x, int y, int flags, void* param );
 	int nextIter();
 	int getIterCount() const { return iterCount; }
+	void getBinMask(const Mat& comMask, Mat& binMask);
 private:
 	void setRectInMask();
 	void setLblsInMask( int flags, Point p, bool isPr );

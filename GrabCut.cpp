@@ -13,7 +13,6 @@ using namespace std;
 //计算 Beta 的值(根据论文中的公式5)
 //这里的β主要用于使得公式4中的指数在高对比度和低对比度下表现得更好
 static double calBeta(const Mat& _img) {
-	double beta;
 	double totalDiff = 0;
 	//遍历全图
 	for (int y = 0; y < _img.rows; y++) {
@@ -42,8 +41,7 @@ static double calBeta(const Mat& _img) {
 	}
 	//计算期望值（和/总边数），注意总边数要考虑边界点的情况
 	double expectation = totalDiff / (4 * _img.cols*_img.rows - 2 * _img.cols - 2 * _img.rows);
-	if (totalDiff <= std::numeric_limits<double>::epsilon()) beta = 0;
-	else beta = 1.0 / (2 * expectation);//公式5
+	double beta = 1.0 / (2 * expectation);//公式5
 	return beta;
 }
 //计算平滑项
@@ -87,8 +85,8 @@ static void calcuNWeight(const Mat& _img, Mat& _l, Mat& _ul, Mat& _u, Mat& _ur, 
 
 //利用opencv中的 kmeans 方法初始化 GMM 模型
 static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) {
-	const int kmeansItCount = 10;//前景背景总共10个GMM分量
-	Mat bgdLabels, fgdLabels;
+	const int maxTurn = 10;//最多循环次数
+	Mat bgdLabels, fgdLabels;//用于记录kmeans分类的结果
 	vector<Vec3f> bgdSamples, fgdSamples;//Vec3f为三通道float，在这里记录了RGB三通道信息
 	Point p;
 	for (p.y = 0; p.y < img.rows; p.y++) {
@@ -99,15 +97,15 @@ static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) 
 				fgdSamples.push_back((Vec3f)img.at<Vec3b>(p));//推入前景样本
 		}
 	}
-	//对前景样本进行kmeas聚类，分为5类
+	//对背景样本进行kmeas聚类，分为5类
 	Mat _bgdSamples((int)bgdSamples.size(), 3, CV_32FC1, &bgdSamples[0][0]);
 	//参数依次为：输入数据，聚类数，聚类标签，终止条件（终止模式、最大迭代次数、精度），重复次数，初始化中心的算法
 	kmeans(_bgdSamples, GMM::K, bgdLabels,
-		TermCriteria(CV_TERMCRIT_ITER, kmeansItCount, 0.0), 0, KMEANS_PP_CENTERS);
-	//对背景样本进行kmeas聚类，分为5类
+		TermCriteria(CV_TERMCRIT_ITER, maxTurn, 0.0), 0, KMEANS_PP_CENTERS);
+	//对前景样本进行kmeas聚类，分为5类
 	Mat _fgdSamples((int)fgdSamples.size(), 3, CV_32FC1, &fgdSamples[0][0]);
 	kmeans(_fgdSamples, GMM::K, fgdLabels,
-		TermCriteria(CV_TERMCRIT_ITER, kmeansItCount, 0.0), 0, KMEANS_PP_CENTERS);
+		TermCriteria(CV_TERMCRIT_ITER, maxTurn, 0.0), 0, KMEANS_PP_CENTERS);
 
 	//初始化中间变量
 	bgdGMM.InitInterVar();
@@ -115,8 +113,10 @@ static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) 
 	for (int i = 0; i < (int)bgdSamples.size(); i++)
 		//往对应模型增加单个点，addSample第一个参数为对应模型编号，第二个参数为像素点颜色信息
 		bgdGMM.addSample(bgdLabels.at<int>(i, 0), bgdSamples[i]);
+	//更新GMM的主要参数
 	bgdGMM.UpdatePara();
 
+	//背景类似
 	fgdGMM.InitInterVar();
 	for (int i = 0; i < (int)fgdSamples.size(); i++)
 		fgdGMM.addSample(fgdLabels.at<int>(i, 0), fgdSamples[i]);
@@ -165,7 +165,7 @@ static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgd
 static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, double myMax, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, CutGraph& _graph) {
 	//获取点数与边数
 	int vertexCount = _img.cols*_img.rows;
-	int edgeCount = (4 * vertexCount - 2 * _img.cols - 2 * _img.rows )/2+1;
+	int edgeCount = (4 * vertexCount - 2 * _img.cols - 2 * _img.rows) / 2 + 1;
 	//初始化CutGraph对象
 	_graph = CutGraph(vertexCount, edgeCount);
 	Point p;
@@ -213,6 +213,7 @@ static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, cons
 static void estimateSegmentation(CutGraph& _graph, Mat& _mask) {
 	_graph.maxFlow();//调用轮子进行最大流计算
 	Point p;
+	//遍历每个点
 	for (p.y = 0; p.y < _mask.rows; p.y++) {
 		for (p.x = 0; p.x < _mask.cols; p.x++) {
 			if (_mask.at<uchar>(p) == MAYBE_BGD || _mask.at<uchar>(p) == MAYBE_FGD) {
@@ -225,16 +226,7 @@ static void estimateSegmentation(CutGraph& _graph, Mat& _mask) {
 }
 GrabCut2D::~GrabCut2D(void) {}
 
-//***GrabCut 主函数
-//一.参数解释：
-//输入：
-//cv::InputArray _img,     :输入的color图像(类型-cv:Mat)
-//cv::Rect rect            :在图像上画的矩形框（类型-cv:Rect) 
-//中间变量
-//cv::InputOutputArray _bgdModel ：   背景模型（推荐GMM)（类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
-//cv::InputOutputArray _fgdModel :    前景模型（推荐GMM) （类型-13*n（组件个数）个double类型的自定义数据结构，可以为cv:Mat，或者Vector/List/数组等）
-//输出:
-//cv::InputOutputArray _mask  : 输出的分割结果 (类型： cv::Mat)
+//GrabCut主函数
 void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	InputOutputArray _bgdModel, InputOutputArray _fgdModel, int mode) {
 	//加载输入颜色图像
@@ -242,12 +234,14 @@ void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	Mat& mask = _mask.getMatRef();
 	Mat& bgdModel = _bgdModel.getMatRef();
 	Mat& fgdModel = _fgdModel.getMatRef();
-	//定义并初始化GMM模型
+	//初始化或者获取GMM模型
 	GMM bgdGMM(bgdModel), fgdGMM(fgdModel);
-	//前背景颜色采样并进行聚类(kmeans)
-	//if (mode == GC_WITH_RECT)
-	//为什么上面那句可以省略？？？存疑
-	initGMMs(img, mask, bgdGMM, fgdGMM);
+	bgdGMM.outputGMM();
+	//如果是第一次迭代，需要利用kmeans进行GMM分量的聚类操作
+	if (mode == GC_WITH_RECT) {
+		initGMMs(img, mask, bgdGMM, fgdGMM);
+	}
+	bgdGMM.outputGMM();
 	//计算terminal-weight(数据项）和neighbor-weight（平滑项）
 	const double gamma = 50;//gamma为经验值，在论文中有提到
 	const double beta = calBeta(img);//根据公式5计算beta值

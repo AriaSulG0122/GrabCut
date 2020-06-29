@@ -1,6 +1,7 @@
 #pragma once
 #include <cv.h>
 #include <iostream>
+
 enum
 {
 	GC_WITH_RECT  = 0, //初次取样，需要初始化GMM
@@ -18,7 +19,7 @@ class GrabCut2D
 {
 public:
 	void GrabCut( cv::InputArray _img, cv::InputOutputArray _mask, cv::Rect rect,
-		cv::InputOutputArray _bgdModel,cv::InputOutputArray _fgdModel, int mode );  
+		cv::InputOutputArray _bgdModel,cv::InputOutputArray _fgdModel,int mode);  
 
 	~GrabCut2D(void);
 };

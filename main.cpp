@@ -68,7 +68,8 @@ int main()
 			//esc£¬ÍË³ö
 		case '\x1b':
 			cout << "Exiting ..." << endl;
-			goto exit_main;
+			cvDestroyWindow(winName.c_str());
+			return 0;
 			//reset
 		case 'r':
 			cout << endl;
@@ -90,8 +91,4 @@ int main()
 			break;
 		}
 	}
-
-exit_main:
-	cvDestroyWindow(winName.c_str());
-	return 0;
 }

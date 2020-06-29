@@ -23,6 +23,9 @@ public:
 	void addSample(int, const cv::Vec3d);
 	//根据添加的数据，计算新的参数结果
 	void UpdatePara();
+
+	void outputGMM();
+
 private:
 	//计算协方差矩阵的逆和行列式的值
 	void calDetAndInv(int);

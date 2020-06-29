@@ -7,8 +7,8 @@ using namespace cv;
 GMM::GMM(Mat& _model) {
 	//GMM模型有13*K项数据，一个权重，三个均值和九个协方差
 	//如果模型为空，则创建一个新的
-	if (_model.empty())	{
-		_model.create(1, 13*K, CV_64FC1);
+	if (_model.empty()) {
+		_model.create(1, 13 * K, CV_64FC1);
 		_model.setTo(Scalar(0));
 	}
 	model = _model;
@@ -52,7 +52,7 @@ int GMM::judgeGMM(const Vec3d _color) const {
 	//分别计算高斯概率，并分配给概率最大的GMM
 	for (int i = 0; i < K; i++) {
 		double p = countPossi(i, _color);
-		if (p > max){
+		if (p > max) {
 			k = i;
 			max = p;
 		}
@@ -147,5 +147,17 @@ void GMM::calDetAndInv(int _i) {
 	}
 }
 
-
-
+void GMM::outputGMM() {
+	for (int i = 0; i < K; i++) {
+		cout << "Model:" << i << endl;
+		cout << "coefs:" << coefs[i] << endl;
+		cout << "mean:" << mean[i * 3 + 0] << " " << mean[i * 3 + 1] << " " << mean[i * 3 + 2] << endl;
+		/*
+		cout << "cov:" << endl;
+		for (int j = 0; j < 3; j++) {
+			cout << "\t" << cov[9 * i + j * 3] << "\t\t" << cov[9 * i + j * 3 + 1] << "\t\t" << cov[9 * i + j * 3 + 2] << endl;
+		}
+		*/
+		
+	}
+}

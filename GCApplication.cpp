@@ -27,6 +27,17 @@ void GCApplication::setImageAndWinName(const Mat& _image, const string& _winName
 	reset();
 }
 
+//Copy the value of comMask to binMask
+void GCApplication::getBinMask( const Mat& comMask, Mat& binMask )
+{
+	if( comMask.empty() || comMask.type()!=CV_8UC1 )
+		CV_Error( CV_StsBadArg, "comMask is empty or has incorrect type (not CV_8UC1)" );
+	if( binMask.empty() || binMask.rows!=comMask.rows || binMask.cols!=comMask.cols )
+		binMask.create( comMask.size(), CV_8UC1 );
+	binMask = comMask & 1;//令MUST_BGD和MAYBE_BGD变为0
+}
+
+
 //显示图片与用户交互信息
 void GCApplication::showImage()
 {
@@ -40,7 +51,7 @@ void GCApplication::showImage()
 	else
 	{
 		getBinMask(mask, binMask);
-		//展示分割后的图像
+		
 		image->copyTo(res, binMask); //mask为0的地方会被遮罩，其余部分正常显示
 	}
 	imwrite("result.jpg", res);
@@ -58,7 +69,7 @@ void GCApplication::showImage()
 	//绘制选中框
 	if (rectState == IN_PROCESS || rectState == SET)
 		rectangle(res, Point(rect.x, rect.y), Point(rect.x + rect.width, rect.y + rect.height), RED, 2);
-
+	//展示分割后的图像
 	imshow(*winName, res);
 }
 
@@ -75,7 +86,7 @@ void GCApplication::setRectInMask()
 	rect.width = min(rect.width, image->cols - rect.x);
 	rect.height = min(rect.height, image->rows - rect.y);
 	//将框内设置为可能的前景
-	(mask(rect)).setTo(Scalar(GC_PR_FGD));    //GC_PR_FGD == 3 
+	(mask(rect)).setTo(GC_PR_FGD);    //GC_PR_FGD == 3 
 }
 
 
@@ -123,7 +134,7 @@ void GCApplication::mouseClick(int event, int x, int y, int flags, void*)
 		//判断ctrl或者shift有没有被按下，分别记录在isb与isf中
 		bool isb = (flags & BGD_KEY) != 0,
 			isf = (flags & FGD_KEY) != 0;
-		if (rectState == NOT_SET && !isb && !isf)//只按下了左键同时又没画过框
+		if (rectState == NOT_SET && !isb && !isf)//只按下了左键同时又没画完框
 		{
 			//正在画框
 			rectState = IN_PROCESS;
@@ -202,7 +213,7 @@ int GCApplication::nextIter()
 		//用户必须先划定框框
 		if (rectState != SET)
 			return iterCount;
-		//设置了一些点交互
+		//初次调用GrabCut，需要使用kmeans对GMM分量进行聚类
 		gc.GrabCut(*image, mask, rect, bgdModel, fgdModel, GC_WITH_RECT);
 		isInitialized = true;
 	}
