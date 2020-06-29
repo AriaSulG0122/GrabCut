@@ -158,6 +158,5 @@ void GMM::outputGMM() {
 			cout << "\t" << cov[9 * i + j * 3] << "\t\t" << cov[9 * i + j * 3 + 1] << "\t\t" << cov[9 * i + j * 3 + 2] << endl;
 		}
 		*/
-		
 	}
 }

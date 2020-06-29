@@ -1,6 +1,5 @@
 #include "GMM.h"
 #include "GrabCut.h"
-#include "CutGraph.h"
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -131,8 +130,12 @@ static void assignGMM(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, con
 		for (p.x = 0; p.x < _img.cols; p.x++) {
 			Vec3d color = (Vec3d)_img.at<Vec3b>(p);
 			uchar t = _mask.at<uchar>(p);
-			if (t == MUST_BGD || t == MAYBE_BGD)_partIndex.at<int>(p) = _bgdGMM.judgeGMM(color);//在背景GMM中选择
-			else _partIndex.at<int>(p) = _fgdGMM.judgeGMM(color);//在前景GMM中选择
+			if (t == MUST_BGD || t == MAYBE_BGD){//在背景GMM中选择
+				_partIndex.at<int>(p) = _bgdGMM.judgeGMM(color);
+			}
+			else {//在前景GMM中选择
+				_partIndex.at<int>(p) = _fgdGMM.judgeGMM(color);
+			}
 		}
 	}
 }
@@ -162,18 +165,14 @@ static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgd
 }
 
 //根据得到的结果构造图（调用给的轮子）
-static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, double myMax, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, CutGraph& _graph) {
-	//获取点数与边数
-	int vertexCount = _img.cols*_img.rows;
-	int edgeCount = (4 * vertexCount - 2 * _img.cols - 2 * _img.rows) / 2 + 1;
-	//初始化CutGraph对象
-	_graph = CutGraph(vertexCount, edgeCount);
+static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, double myMax, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, GraphType *_graph) {
+
 	Point p;
 	//遍历每个点
 	for (p.y = 0; p.y < _img.rows; p.y++) {
 		for (p.x = 0; p.x < _img.cols; p.x++) {
 			//增加顶点并获取当前节点编号
-			int vNum = _graph.addVertex();
+			int vNum = _graph->add_node();
 			Vec3b color = _img.at<Vec3b>(p);
 			double wSource = 0;//出度
 			double wSink = 0;//入度
@@ -188,36 +187,36 @@ static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, cons
 			//如果该点为前景点，同理
 			else wSource = myMax;
 			//为当前节点增加入度和出度值
-			_graph.addVertexWeights(vNum, wSource, wSink);
+			_graph->add_tweights(vNum, wSource, wSink);
 			//增加平滑项的边
 			if (p.x > 0) {
 				double weight = _l.at<double>(p);
-				_graph.addEdges(vNum, vNum - 1, weight);
+				_graph->add_edge(vNum, vNum - 1, weight,weight);
 			}
 			if (p.x > 0 && p.y > 0) {
 				double weight = _ul.at<double>(p);
-				_graph.addEdges(vNum, vNum - _img.cols - 1, weight);
+				_graph->add_edge(vNum, vNum - _img.cols - 1, weight,weight);
 			}
 			if (p.y > 0) {
 				double weight = _u.at<double>(p);
-				_graph.addEdges(vNum, vNum - _img.cols, weight);
+				_graph->add_edge(vNum, vNum - _img.cols, weight,weight);
 			}
 			if (p.x < _img.cols - 1 && p.y > 0) {
 				double weight = _ur.at<double>(p);
-				_graph.addEdges(vNum, vNum - _img.cols + 1, weight);
+				_graph->add_edge(vNum, vNum - _img.cols + 1, weight,weight);
 			}
 		}
 	}
 }
 //进行分割
-static void estimateSegmentation(CutGraph& _graph, Mat& _mask) {
-	_graph.maxFlow();//调用轮子进行最大流计算
+static void estimateSegmentation(GraphType *_graph , Mat& _mask) {
+	_graph->maxflow();//调用轮子进行最大流计算
 	Point p;
 	//遍历每个点
 	for (p.y = 0; p.y < _mask.rows; p.y++) {
 		for (p.x = 0; p.x < _mask.cols; p.x++) {
 			if (_mask.at<uchar>(p) == MAYBE_BGD || _mask.at<uchar>(p) == MAYBE_FGD) {
-				if (_graph.isSourceSegment(p.y*_mask.cols + p.x))//如果分割后是目标
+				if (_graph->what_segment(p.y*_mask.cols + p.x) == Graph<double, double, double>::SOURCE)//如果分割后是目标
 					_mask.at<uchar>(p) = MAYBE_FGD;//赋值为可能前景
 				else _mask.at<uchar>(p) = MAYBE_BGD;//赋值为可能背景
 			}
@@ -248,13 +247,19 @@ void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	Mat leftW, upleftW, upW, uprightW;
 	//计算平滑项(左、左上、上、右上)
 	calcuNWeight(img, leftW, upleftW, upW, uprightW, beta, gamma);
+	
 	//compIdxs用于记录迭代过程中的数据
 	Mat compIdxs(img.size(), CV_32SC1);
 	const double myMax = 10000;
-	CutGraph graph;
+	//获取点数与边数
+	int vertexCount = img.cols*img.rows;
+	int edgeCount = (4 * vertexCount - 2 * img.cols - 2 * img.rows) / 2 + 1;
+	//初始化CutGraph对象
+	GraphType graph=GraphType(vertexCount,edgeCount);
+	//CutGraph graph;
 	//进行本轮的迭代（Inerative Minimisation）
 	assignGMM(img, mask, bgdGMM, fgdGMM, compIdxs);//匹配GMM模型
 	learnGMMs(img, mask, bgdGMM, fgdGMM, compIdxs);//学习GMM参数
-	getGraph(img, mask, bgdGMM, fgdGMM, myMax, leftW, upleftW, upW, uprightW, graph);//创建图graph，为分割做准备
-	estimateSegmentation(graph, mask);//调用max flow对图graph进行预测分割
+	getGraph(img, mask, bgdGMM, fgdGMM, myMax, leftW, upleftW, upW, uprightW, &graph);//创建图graph，为分割做准备
+	estimateSegmentation(&graph, mask);//调用max flow对图graph进行预测分割
 }

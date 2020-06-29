@@ -99,26 +99,26 @@ void GCApplication::setLblsInMask(int flags, Point p, bool isPr)
 		//获取对应的容器首地址
 		bpxls = &bgdPxls;
 		fpxls = &fgdPxls;
-		bvalue = GC_BGD;    //0
-		fvalue = GC_FGD;    //1
+		bvalue = GC_BGD;  //确定背景  
+		fvalue = GC_FGD;  //确定前景
 	}
 	else    //不确定的前景或背景
 	{
 		bpxls = &prBgdPxls;
 		fpxls = &prFgdPxls;
-		bvalue = GC_PR_BGD; //2
-		fvalue = GC_PR_FGD; //3
+		bvalue = GC_PR_BGD;	//可能背景
+		fvalue = GC_PR_FGD; //可能前景
 	}
 	//往对应的容器中推入像素
 	if (flags & BGD_KEY)
 	{
 		bpxls->push_back(p);
-		circle(mask, p, radius, bvalue, thickness);   //Set point value = 2
+		circle(mask, p, radius, bvalue, thickness);   //Set point value
 	}
 	if (flags & FGD_KEY)
 	{
 		fpxls->push_back(p);
-		circle(mask, p, radius, fvalue, thickness);   //Set point value = 3
+		circle(mask, p, radius, fvalue, thickness);   //Set point value
 	}
 }
 

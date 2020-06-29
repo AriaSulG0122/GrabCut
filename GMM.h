@@ -1,9 +1,7 @@
-#ifndef GMM_H_
-#define GMM_H_
+#pragma once
 #include <opencv2\opencv.hpp>
 #include <opencv2\highgui\highgui.hpp>
 #include <opencv2\core\core.hpp>
-
 
 class GMM {
 public:
@@ -48,4 +46,3 @@ private:
 	int sampleCounts[K];//每个GMM模型的像素点数
 	int totalSampleCount;
 };
-#endif
