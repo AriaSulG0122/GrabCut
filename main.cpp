@@ -79,12 +79,12 @@ int main()
 			//开始运行
 		case 'n':
 			int iterCount = gcapp.getIterCount();
-			cout << "Begin iterator:" << iterCount << "...\n";
+			cout << "**********************Begin iterator:" << iterCount << "**********************\n";
 			int newIterCount = gcapp.nextIter();
 			if (newIterCount > iterCount)
 			{
 				gcapp.showImage();
-				cout << "Finish iterator:" << iterCount << endl;
+				cout << "**********************Finish iterator:" << iterCount << "**********************\n";
 			}
 			else
 				cout << "Rectangle must be determined!" << endl;

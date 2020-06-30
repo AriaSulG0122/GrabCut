@@ -1,17 +1,9 @@
-#include "GMM.h"
 #include "GrabCut.h"
-#include <iostream>
-#include <limits>
-#include <vector>
-#include <opencv2\opencv.hpp>
-#include <opencv2\highgui\highgui.hpp>
-#include <opencv2\core\core.hpp>
-using namespace cv;
-using namespace std;
 
+const double myMax = 10000.0;
 //计算 Beta 的值(根据论文中的公式5)
 //这里的β主要用于使得公式4中的指数在高对比度和低对比度下表现得更好
-static double calBeta(const Mat& _img) {
+double MyGrabCut::calBeta(const Mat& _img) {
 	double totalDiff = 0;
 	//遍历全图
 	for (int y = 0; y < _img.rows; y++) {
@@ -44,7 +36,7 @@ static double calBeta(const Mat& _img) {
 	return beta;
 }
 //计算平滑项
-static void calcuNWeight(const Mat& _img, Mat& _l, Mat& _ul, Mat& _u, Mat& _ur, double _beta, double _gamma) {
+void MyGrabCut::calcuNWeight(const Mat& _img, Mat& _l, Mat& _ul, Mat& _u, Mat& _ur, double _beta, double _gamma) {
 	const double gammaDiv = _gamma / std::sqrt(2.0f);//斜边的gamma值除根号2
 	_l.create(_img.size(), CV_64FC1);
 	_ul.create(_img.size(), CV_64FC1);
@@ -83,7 +75,7 @@ static void calcuNWeight(const Mat& _img, Mat& _l, Mat& _ul, Mat& _u, Mat& _ur, 
 }
 
 //利用opencv中的 kmeans 方法初始化 GMM 模型
-static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) {
+void MyGrabCut::initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) {
 	const int maxTurn = 10;//最多循环次数
 	Mat bgdLabels, fgdLabels;//用于记录kmeans分类的结果
 	vector<Vec3f> bgdSamples, fgdSamples;//Vec3f为三通道float，在这里记录了RGB三通道信息
@@ -123,33 +115,33 @@ static void initGMMs(const Mat& img, const Mat& mask, GMM& bgdGMM, GMM& fgdGMM) 
 }
 
 //迭代循环第一步，为每个像素分配GMM中所属的高斯模型，保存在partIndex中。
-static void assignGMM(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, Mat& _partIndex) {
+void MyGrabCut::assignGMM(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, Mat& _GmmNumber) {
 	Point p;
 	//遍历每个像素
 	for (p.y = 0; p.y < _img.rows; p.y++) {
 		for (p.x = 0; p.x < _img.cols; p.x++) {
 			Vec3d color = (Vec3d)_img.at<Vec3b>(p);
 			uchar t = _mask.at<uchar>(p);
-			if (t == MUST_BGD || t == MAYBE_BGD){//在背景GMM中选择
-				_partIndex.at<int>(p) = _bgdGMM.judgeGMM(color);
+			if (t == MUST_BGD || t == MAYBE_BGD) {//在背景GMM中选择
+				_GmmNumber.at<int>(p) = _bgdGMM.judgeGMM(color);//为该点分配概率最大的GMM分量
 			}
 			else {//在前景GMM中选择
-				_partIndex.at<int>(p) = _fgdGMM.judgeGMM(color);
+				_GmmNumber.at<int>(p) = _fgdGMM.judgeGMM(color);
 			}
 		}
 	}
 }
 
 //迭代循环第二步，根据得到的结果计算GMM参数值。
-static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgdGMM, const Mat& _partIndex) {
+void MyGrabCut::learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgdGMM, const Mat& _GmmNumber) {
 	_bgdGMM.InitInterVar();
 	_fgdGMM.InitInterVar();
 	Point p;
-	//先分配样本
+	//先分配样本，依次找所有属于某个GMM分量的样本
 	for (int i = 0; i < GMM::K; i++) {
 		for (p.y = 0; p.y < _img.rows; p.y++) {
 			for (p.x = 0; p.x < _img.cols; p.x++) {
-				int tmp = _partIndex.at<int>(p);
+				int tmp = _GmmNumber.at<int>(p);
 				if (tmp == i) {
 					if (_mask.at<uchar>(p) == MUST_BGD || _mask.at<uchar>(p) == MAYBE_BGD)
 						_bgdGMM.addSample(tmp, _img.at<Vec3b>(p));
@@ -165,14 +157,14 @@ static void learnGMMs(const Mat& _img, const Mat& _mask, GMM& _bgdGMM, GMM& _fgd
 }
 
 //根据得到的结果构造图（调用给的轮子）
-static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, double myMax, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, GraphType *_graph) {
-
+void MyGrabCut::getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, const GMM& _fgdGMM, const Mat& _l, const Mat& _ul, const Mat& _u, const Mat& _ur, GraphType *_graph) {
 	Point p;
 	//遍历每个点
 	for (p.y = 0; p.y < _img.rows; p.y++) {
 		for (p.x = 0; p.x < _img.cols; p.x++) {
 			//增加顶点并获取当前节点编号
 			int vNum = _graph->add_node();
+			//获取当前点的三色
 			Vec3b color = _img.at<Vec3b>(p);
 			double wSource = 0;//出度
 			double wSink = 0;//入度
@@ -182,34 +174,34 @@ static void getGraph(const Mat& _img, const Mat& _mask, const GMM& _bgdGMM, cons
 				wSource = -log(_bgdGMM.tWeight(color));
 				wSink = -log(_fgdGMM.tWeight(color));
 			}
-			//如果该点为背景点，入度为无穷，即min cut分割时不会去切这条边
+			//如果该点为背景点，入度为无穷，出度为0。换句话说，必然和前景分离
 			else if (_mask.at<uchar>(p) == MUST_BGD) wSink = myMax;
-			//如果该点为前景点，同理
+			//如果该点为前景点，出度为无穷，入度为0。换句话说，必然和背景分离
 			else wSource = myMax;
 			//为当前节点增加入度和出度值
 			_graph->add_tweights(vNum, wSource, wSink);
 			//增加平滑项的边
-			if (p.x > 0) {
+			if (p.x > 0) {//左面右边
 				double weight = _l.at<double>(p);
-				_graph->add_edge(vNum, vNum - 1, weight,weight);
+				_graph->add_edge(vNum, vNum - 1, weight, weight);
 			}
-			if (p.x > 0 && p.y > 0) {
+			if (p.x > 0 && p.y > 0) {//左上有边
 				double weight = _ul.at<double>(p);
-				_graph->add_edge(vNum, vNum - _img.cols - 1, weight,weight);
+				_graph->add_edge(vNum, vNum - _img.cols - 1, weight, weight);
 			}
-			if (p.y > 0) {
+			if (p.y > 0) {//上面有边
 				double weight = _u.at<double>(p);
-				_graph->add_edge(vNum, vNum - _img.cols, weight,weight);
+				_graph->add_edge(vNum, vNum - _img.cols, weight, weight);
 			}
-			if (p.x < _img.cols - 1 && p.y > 0) {
+			if (p.x < _img.cols - 1 && p.y > 0) {//右上有边
 				double weight = _ur.at<double>(p);
-				_graph->add_edge(vNum, vNum - _img.cols + 1, weight,weight);
+				_graph->add_edge(vNum, vNum - _img.cols + 1, weight, weight);
 			}
 		}
 	}
 }
 //进行分割
-static void estimateSegmentation(GraphType *_graph , Mat& _mask) {
+void MyGrabCut::estimateSegmentation(GraphType *_graph, Mat& _mask) {
 	_graph->maxflow();//调用轮子进行最大流计算
 	Point p;
 	//遍历每个点
@@ -223,43 +215,51 @@ static void estimateSegmentation(GraphType *_graph , Mat& _mask) {
 		}
 	}
 }
-GrabCut2D::~GrabCut2D(void) {}
+MyGrabCut::~MyGrabCut(void) {}
 
 //GrabCut主函数
-void GrabCut2D::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
+void MyGrabCut::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	InputOutputArray _bgdModel, InputOutputArray _fgdModel, int mode) {
+
 	//加载输入颜色图像
-	Mat img = _img.getMat();
-	Mat& mask = _mask.getMatRef();
-	Mat& bgdModel = _bgdModel.getMatRef();
-	Mat& fgdModel = _fgdModel.getMatRef();
-	//初始化或者获取GMM模型
+	Mat img = _img.getMat();//copy
+	Mat& mask = _mask.getMatRef();//地址
+	Mat& bgdModel = _bgdModel.getMatRef();//地址
+	Mat& fgdModel = _fgdModel.getMatRef();//地址
+	//初始化 或者 获取刚才计算的 GMM模型
 	GMM bgdGMM(bgdModel), fgdGMM(fgdModel);
+	cout << "----------------Background Model-----------------"<<endl;
 	bgdGMM.outputGMM();
 	//如果是第一次迭代，需要利用kmeans进行GMM分量的聚类操作
-	if (mode == GC_WITH_RECT) {
+	if (mode == GC_WITH_RECT) 
 		initGMMs(img, mask, bgdGMM, fgdGMM);
-	}
-	bgdGMM.outputGMM();
-	//计算terminal-weight(数据项）和neighbor-weight（平滑项）
+	//输出各个GMM模型的参数
+	//cout << "----------------Background Model-----------------"<<endl;
+	//bgdGMM.outputGMM();
+	//cout << "----------------Foreground Model-----------------"<<endl;
+	//fgdGMM.outputGMM();
+
+	//和（平滑项）
 	const double gamma = 50;//gamma为经验值，在论文中有提到
 	const double beta = calBeta(img);//根据公式5计算beta值
 	Mat leftW, upleftW, upW, uprightW;
-	//计算平滑项(左、左上、上、右上)
-	calcuNWeight(img, leftW, upleftW, upW, uprightW, beta, gamma);
 	
-	//compIdxs用于记录迭代过程中的数据
-	Mat compIdxs(img.size(), CV_32SC1);
-	const double myMax = 10000;
+	//计算neighbor-weight平滑项(左、左上、上、右上)
+	calcuNWeight(img, leftW, upleftW, upW, uprightW, beta, gamma);
+
+	//GmmNumber用于每个像素所属的GMM分量的编号
+	Mat GmmNumber(img.size(), CV_32SC1);
 	//获取点数与边数
 	int vertexCount = img.cols*img.rows;
 	int edgeCount = (4 * vertexCount - 2 * img.cols - 2 * img.rows) / 2 + 1;
 	//初始化CutGraph对象
-	GraphType graph=GraphType(vertexCount,edgeCount);
-	//CutGraph graph;
+	GraphType graph = GraphType(vertexCount, edgeCount);
+
 	//进行本轮的迭代（Inerative Minimisation）
-	assignGMM(img, mask, bgdGMM, fgdGMM, compIdxs);//匹配GMM模型
-	learnGMMs(img, mask, bgdGMM, fgdGMM, compIdxs);//学习GMM参数
-	getGraph(img, mask, bgdGMM, fgdGMM, myMax, leftW, upleftW, upW, uprightW, &graph);//创建图graph，为分割做准备
+	assignGMM(img, mask, bgdGMM, fgdGMM, GmmNumber);//匹配GMM模型
+	learnGMMs(img, mask, bgdGMM, fgdGMM, GmmNumber);//学习GMM参数
+	cout << "----------------Background Model-----------------"<<endl;
+	bgdGMM.outputGMM();
+	getGraph(img, mask, bgdGMM, fgdGMM, leftW, upleftW, upW, uprightW, &graph);//创建图graph并计算terminal-weight数据项，为分割做准备
 	estimateSegmentation(&graph, mask);//调用max flow对图graph进行预测分割
 }

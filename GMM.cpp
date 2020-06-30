@@ -1,21 +1,20 @@
 #include "GMM.h"
-#include <vector>
-using namespace std;
-using namespace cv;
 
-//GMM的构造函数，从 model 中读取参数并存储
+//GMM的构造函数
 GMM::GMM(Mat& _model) {
 	//GMM模型有13*K项数据，一个权重，三个均值和九个协方差
 	//如果模型为空，则创建一个新的
 	if (_model.empty()) {
-		_model.create(1, 13 * K, CV_64FC1);
+		_model.create(1, 23 * K, CV_64FC1);
 		_model.setTo(Scalar(0));
 	}
 	model = _model;
-	//存储顺序为权重、均值和协方差
-	coefs = model.ptr<double>(0);//占一个位
+	//获取各项数据的起始位置（存储顺序依次为为权重、均值、协方差）
+	coefs = model.ptr<double>(0);//获取model的首地址，占一个位
 	mean = coefs + K;//占3K个位
 	cov = mean + 3 * K;//占9K个位
+	covDet = cov + 9 * K;//占K个位
+	covInv = covDet + K;//占9K个位
 	//如果某个项的权重不为0，则计算其协方差的逆和行列式
 	for (int i = 0; i < K; i++)
 		if (coefs[i] > 0)
@@ -30,9 +29,9 @@ double GMM::countPossi(int _i, const Vec3d _color) const {
 		//得到各原色的x-u值
 		diff[0] -= curMean[0]; diff[1] -= curMean[1]; diff[2] -= curMean[2];
 		//计算(x-u)^T * Sigma-1(x-u)
-		double mult = diff[0] * (diff[0] * covInv[_i][0][0] + diff[1] * covInv[_i][1][0] + diff[2] * covInv[_i][2][0])
-			+ diff[1] * (diff[0] * covInv[_i][0][1] + diff[1] * covInv[_i][1][1] + diff[2] * covInv[_i][2][1])
-			+ diff[2] * (diff[0] * covInv[_i][0][2] + diff[1] * covInv[_i][1][2] + diff[2] * covInv[_i][2][2]);
+		double mult = diff[0] * (diff[0] * covInv[_i*9] + diff[1] * covInv[_i*9+3] + diff[2] * covInv[_i*9+6])
+			+ diff[1] * (diff[0] * covInv[_i*9+1] + diff[1] * covInv[_i*9+4] + diff[2] * covInv[_i*9+7])
+			+ diff[2] * (diff[0] * covInv[_i*9+2] + diff[1] * covInv[_i*9+5] + diff[2] * covInv[_i*9+8]);
 		res = 1.0f / sqrt(covDet[_i]) * exp(-0.5f*mult);
 	}
 	return res;
@@ -116,9 +115,9 @@ void GMM::UpdatePara() {
 				}
 			}
 			//计算行列式
-			double dtrm = curCov[0] * (curCov[4] * curCov[8] - curCov[5] * curCov[7]) - curCov[1] * (curCov[3] * curCov[8] - curCov[5] * curCov[6]) + curCov[2] * (curCov[3] * curCov[7] - curCov[4] * curCov[6]);
+			double det = curCov[0] * (curCov[4] * curCov[8] - curCov[5] * curCov[7]) - curCov[1] * (curCov[3] * curCov[8] - curCov[5] * curCov[6]) + curCov[2] * (curCov[3] * curCov[7] - curCov[4] * curCov[6]);
 			//如果行列式值太小，则加入一些噪音，避免误差扩散
-			if (dtrm <= std::numeric_limits<double>::epsilon()) {
+			if (det <= std::numeric_limits<double>::epsilon()) {
 				curCov[0] += variance;
 				curCov[4] += variance;
 				curCov[8] += variance;
@@ -135,28 +134,31 @@ void GMM::calDetAndInv(int _i) {
 		//行列式的值
 		double dtrm = covDet[_i] = c[0] * (c[4] * c[8] - c[5] * c[7]) - c[1] * (c[3] * c[8] - c[5] * c[6]) + c[2] * (c[3] * c[7] - c[4] * c[6]);
 		//计算逆矩阵，根据伴随矩阵求逆矩阵
-		covInv[_i][0][0] = (c[4] * c[8] - c[5] * c[7]) / dtrm;
-		covInv[_i][1][0] = -(c[3] * c[8] - c[5] * c[6]) / dtrm;
-		covInv[_i][2][0] = (c[3] * c[7] - c[4] * c[6]) / dtrm;
-		covInv[_i][0][1] = -(c[1] * c[8] - c[2] * c[7]) / dtrm;
-		covInv[_i][1][1] = (c[0] * c[8] - c[2] * c[6]) / dtrm;
-		covInv[_i][2][1] = -(c[0] * c[7] - c[1] * c[6]) / dtrm;
-		covInv[_i][0][2] = (c[1] * c[5] - c[2] * c[4]) / dtrm;
-		covInv[_i][1][2] = -(c[0] * c[5] - c[2] * c[3]) / dtrm;
-		covInv[_i][2][2] = (c[0] * c[4] - c[1] * c[3]) / dtrm;
+		covInv[_i*9] = (c[4] * c[8] - c[5] * c[7]) / dtrm;
+		covInv[_i*9+3] = -(c[3] * c[8] - c[5] * c[6]) / dtrm;
+		covInv[_i*9+6] = (c[3] * c[7] - c[4] * c[6]) / dtrm;
+		covInv[_i*9+1] = -(c[1] * c[8] - c[2] * c[7]) / dtrm;
+		covInv[_i*9+4] = (c[0] * c[8] - c[2] * c[6]) / dtrm;
+		covInv[_i*9+7] = -(c[0] * c[7] - c[1] * c[6]) / dtrm;
+		covInv[_i*9+2] = (c[1] * c[5] - c[2] * c[4]) / dtrm;
+		covInv[_i*9+5] = -(c[0] * c[5] - c[2] * c[3]) / dtrm;
+		covInv[_i*9+8] = (c[0] * c[4] - c[1] * c[3]) / dtrm;
 	}
 }
 
 void GMM::outputGMM() {
 	for (int i = 0; i < K; i++) {
-		cout << "Model:" << i << endl;
+		cout << "Model Number:" << i << endl;
 		cout << "coefs:" << coefs[i] << endl;
-		cout << "mean:" << mean[i * 3 + 0] << " " << mean[i * 3 + 1] << " " << mean[i * 3 + 2] << endl;
-		/*
+		cout << "mean:" << mean[i * 3 + 0] << " " << mean[i * 3 + 1] << " " << mean[i * 3 + 2];
+		cout<<"   mean of 3:"<< (mean[i * 3 + 0]+ mean[i * 3 + 1]+ mean[i * 3 + 2])/3<<endl;
 		cout << "cov:" << endl;
 		for (int j = 0; j < 3; j++) {
 			cout << "\t" << cov[9 * i + j * 3] << "\t\t" << cov[9 * i + j * 3 + 1] << "\t\t" << cov[9 * i + j * 3 + 2] << endl;
 		}
-		*/
+		cout << "inv cov:" << endl;
+		for (int j = 0; j < 3; j++) {
+			cout << "\t" << covInv[9 * i + j * 3] << "\t\t" << covInv[9 * i + j * 3 + 1] << "\t\t" << covInv[9 * i + j * 3 + 2] << endl;
+		}
 	}
 }

@@ -49,7 +49,7 @@ private:
 	Rect rect;
 	vector<Point> fgdPxls, bgdPxls, prFgdPxls, prBgdPxls;
 	int iterCount;
-	GrabCut2D gc;
+	MyGrabCut gc;
 };
 
 

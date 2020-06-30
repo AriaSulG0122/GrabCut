@@ -2,6 +2,9 @@
 #include <opencv2\opencv.hpp>
 #include <opencv2\highgui\highgui.hpp>
 #include <opencv2\core\core.hpp>
+#include <vector>
+using namespace std;
+using namespace cv;
 
 class GMM {
 public:
@@ -21,7 +24,7 @@ public:
 	void addSample(int, const cv::Vec3d);
 	//根据添加的数据，计算新的参数结果
 	void UpdatePara();
-
+	//输出GMM分量的一些重要参数
 	void outputGMM();
 
 private:
@@ -35,14 +38,15 @@ private:
 	double *mean;
 	//每个GMM分量的 协方差
 	double *cov;
-	//存储协方差的逆，便于计算
-	double covInv[K][3][3];
-	//存储协方差的行列式值
-	double covDet[K];
+	//协方差矩阵的行列式值，用于计算混合高斯密度模型的GMM分量
+	double *covDet;
+	//协方差的逆，用于计算混合高斯密度模型的GMM分量
+	double *covInv;
+	
 
 	//用于学习过程中保存中间数据的变量
 	double sums[K][3];//每个GMM模型的每个颜色通道的数值总和
-	double prods[K][3][3];
+	double prods[K][3][3];//存储协方差矩阵的中间结果
 	int sampleCounts[K];//每个GMM模型的像素点数
-	int totalSampleCount;
+	int totalSampleCount;//所有样本数
 };

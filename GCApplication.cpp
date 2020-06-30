@@ -28,12 +28,12 @@ void GCApplication::setImageAndWinName(const Mat& _image, const string& _winName
 }
 
 //Copy the value of comMask to binMask
-void GCApplication::getBinMask( const Mat& comMask, Mat& binMask )
+void GCApplication::getBinMask(const Mat& comMask, Mat& binMask)
 {
-	if( comMask.empty() || comMask.type()!=CV_8UC1 )
-		CV_Error( CV_StsBadArg, "comMask is empty or has incorrect type (not CV_8UC1)" );
-	if( binMask.empty() || binMask.rows!=comMask.rows || binMask.cols!=comMask.cols )
-		binMask.create( comMask.size(), CV_8UC1 );
+	if (comMask.empty() || comMask.type() != CV_8UC1)
+		CV_Error(CV_StsBadArg, "comMask is empty or has incorrect type (not CV_8UC1)");
+	if (binMask.empty() || binMask.rows != comMask.rows || binMask.cols != comMask.cols)
+		binMask.create(comMask.size(), CV_8UC1);
 	binMask = comMask & 1;//令MUST_BGD和MAYBE_BGD变为0
 }
 
@@ -51,7 +51,7 @@ void GCApplication::showImage()
 	else
 	{
 		getBinMask(mask, binMask);
-		
+
 		image->copyTo(res, binMask); //mask为0的地方会被遮罩，其余部分正常显示
 	}
 	imwrite("result.jpg", res);
@@ -114,11 +114,13 @@ void GCApplication::setLblsInMask(int flags, Point p, bool isPr)
 	{
 		bpxls->push_back(p);
 		circle(mask, p, radius, bvalue, thickness);   //Set point value
+		cout << "Draw Background Point:" << p << endl;
 	}
 	if (flags & FGD_KEY)
 	{
 		fpxls->push_back(p);
 		circle(mask, p, radius, fvalue, thickness);   //Set point value
+		cout << "Draw Background Point:" << p << endl;
 	}
 }
 
