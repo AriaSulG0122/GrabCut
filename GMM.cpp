@@ -9,16 +9,12 @@ GMM::GMM(Mat& _model) {
 		_model.setTo(Scalar(0));
 	}
 	model = _model;
-	//获取各项数据的起始位置（存储顺序依次为为权重、均值、协方差）
+	//获取各项数据的起始位置（存储顺序依次为为权重、均值、协方差、协方差的行列式、逆协方差）
 	coefs = model.ptr<double>(0);//获取model的首地址，占一个位
 	mean = coefs + K;//占3K个位
 	cov = mean + 3 * K;//占9K个位
 	covDet = cov + 9 * K;//占K个位
 	covInv = covDet + K;//占9K个位
-	//如果某个项的权重不为0，则计算其协方差的逆和行列式
-	for (int i = 0; i < K; i++)
-		if (coefs[i] > 0)
-			calDetAndInv(i);
 }
 //按照混合高斯密度模型进行计算高斯概率
 double GMM::countPossi(int _i, const Vec3d _color) const {

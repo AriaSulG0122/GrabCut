@@ -239,27 +239,27 @@ void MyGrabCut::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	//cout << "----------------Foreground Model-----------------"<<endl;
 	//fgdGMM.outputGMM();
 
-	//和（平滑项）
+
+
+	//GmmNumber用于记录每个像素所属的GMM分量的编号
+	Mat GmmNumber(img.size(), CV_32SC1);
+
+	//进行本轮的迭代（Inerative Minimisation）
+	assignGMM(img, mask, bgdGMM, fgdGMM, GmmNumber);//1.匹配GMM模型
+	learnGMMs(img, mask, bgdGMM, fgdGMM, GmmNumber);//2.学习GMM参数
+	cout << "----------------Background Model-----------------"<<endl;
+	bgdGMM.outputGMM();
+	//记录平滑项
+	Mat leftW, upleftW, upW, uprightW;
 	const double gamma = 50;//gamma为经验值，在论文中有提到
 	const double beta = calBeta(img);//根据公式5计算beta值
-	Mat leftW, upleftW, upW, uprightW;
-	
 	//计算neighbor-weight平滑项(左、左上、上、右上)
 	calcuNWeight(img, leftW, upleftW, upW, uprightW, beta, gamma);
-
-	//GmmNumber用于每个像素所属的GMM分量的编号
-	Mat GmmNumber(img.size(), CV_32SC1);
 	//获取点数与边数
 	int vertexCount = img.cols*img.rows;
 	int edgeCount = (4 * vertexCount - 2 * img.cols - 2 * img.rows) / 2 + 1;
 	//初始化CutGraph对象
 	GraphType graph = GraphType(vertexCount, edgeCount);
-
-	//进行本轮的迭代（Inerative Minimisation）
-	assignGMM(img, mask, bgdGMM, fgdGMM, GmmNumber);//匹配GMM模型
-	learnGMMs(img, mask, bgdGMM, fgdGMM, GmmNumber);//学习GMM参数
-	cout << "----------------Background Model-----------------"<<endl;
-	bgdGMM.outputGMM();
-	getGraph(img, mask, bgdGMM, fgdGMM, leftW, upleftW, upW, uprightW, &graph);//创建图graph并计算terminal-weight数据项，为分割做准备
-	estimateSegmentation(&graph, mask);//调用max flow对图graph进行预测分割
+	getGraph(img, mask, bgdGMM, fgdGMM, leftW, upleftW, upW, uprightW, &graph);//3.创建图graph并计算terminal-weight数据项，为分割做准备
+	estimateSegmentation(&graph, mask);//4.调用max flow对图graph进行预测分割
 }

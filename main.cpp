@@ -50,7 +50,7 @@ int main()
 	s.height = image.rows;
 	s.width = image.cols;
 	resize(image, image, s);
-
+	cout << "Pic Size:  Height:" << s.height << "  Width:" << s.width;
 	//Êä³ö°ïÖúÐÅÏ¢
 	help();
 
