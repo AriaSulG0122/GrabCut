@@ -141,7 +141,7 @@ void GMM::calDetAndInv(int _i) {
 		covInv[_i*9+8] = (c[0] * c[4] - c[1] * c[3]) / dtrm;
 	}
 }
-
+//输出模型信息
 void GMM::outputGMM() {
 	for (int i = 0; i < K; i++) {
 		cout << "Model Number:" << i << endl;

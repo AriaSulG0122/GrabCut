@@ -1,7 +1,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include "GCApplication.h"
-
+#include <time.h>
 //输出帮助信息
 static void help()
 {
@@ -35,8 +35,11 @@ static void on_mouse(int event, int x, int y, int flags, void* param)
 
 int main()
 {
+	time_t start, end;
 	//文件名
 	string filename = "messi5.jpg";
+	cout << "Please input the file name:";
+	cin>>filename;
 	//读取文件
 	Mat image = imread(filename, 1);
 	if (image.empty())
@@ -78,6 +81,7 @@ int main()
 			break;
 			//开始运行
 		case 'n':
+			start = clock();
 			int iterCount = gcapp.getIterCount();
 			cout << "**********************Begin iterator:" << iterCount << "**********************\n";
 			int newIterCount = gcapp.nextIter();
@@ -85,6 +89,8 @@ int main()
 			{
 				gcapp.showImage();
 				cout << "**********************Finish iterator:" << iterCount << "**********************\n";
+				end = clock();
+				cout << "time=" << end-start << endl;
 			}
 			else
 				cout << "Rectangle must be determined!" << endl;

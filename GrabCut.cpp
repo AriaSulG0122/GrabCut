@@ -228,10 +228,8 @@ void MyGrabCut::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	Mat& fgdModel = _fgdModel.getMatRef();//地址
 	//初始化 或者 获取刚才计算的 GMM模型
 	GMM bgdGMM(bgdModel), fgdGMM(fgdModel);
-	cout << "----------------Background Model-----------------"<<endl;
-	bgdGMM.outputGMM();
 	//如果是第一次迭代，需要利用kmeans进行GMM分量的聚类操作
-	if (mode == GC_WITH_RECT) 
+	if (mode == GC_WITH_RECT)
 		initGMMs(img, mask, bgdGMM, fgdGMM);
 	//输出各个GMM模型的参数
 	//cout << "----------------Background Model-----------------"<<endl;
@@ -239,16 +237,12 @@ void MyGrabCut::GrabCut(InputArray _img, InputOutputArray _mask, Rect rect,
 	//cout << "----------------Foreground Model-----------------"<<endl;
 	//fgdGMM.outputGMM();
 
-
-
 	//GmmNumber用于记录每个像素所属的GMM分量的编号
 	Mat GmmNumber(img.size(), CV_32SC1);
 
 	//进行本轮的迭代（Inerative Minimisation）
 	assignGMM(img, mask, bgdGMM, fgdGMM, GmmNumber);//1.匹配GMM模型
 	learnGMMs(img, mask, bgdGMM, fgdGMM, GmmNumber);//2.学习GMM参数
-	cout << "----------------Background Model-----------------"<<endl;
-	bgdGMM.outputGMM();
 	//记录平滑项
 	Mat leftW, upleftW, upW, uprightW;
 	const double gamma = 50;//gamma为经验值，在论文中有提到
